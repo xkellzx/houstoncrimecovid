@@ -1,0 +1,499 @@
+---
+title: "Crime and COVID-19 in Houston: How do they relate?"
+author: "Gail Oudekerk, Kelly Zeng, Elijah Sales, Naghmeh Hosseini, Jennifer Jia"
+date: "4/21/2022"
+output: ioslides_presentation
+runtime: shiny
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Research Question
+
+Is there a relationship between COVID-19 positivity rates and crime offense rates in Houston, Texas? 
+
+## Datasets
+
+- Crime by street/neighborhood in Houston from 2017 to 2021
+  - Incident, OccurrenceDate, OccurenceHour, NIBRSClass, NIBRSDescription, OffenseCount, Beat, Premise, StreetNo, BlockRange, StreetName, StreetType, Suffix, City, ZIPCode
+
+- Daily COVID-19 positivity rate in Harris County from 2020 to 2022
+  - ï..OBJECTID, id, Date, Positive_Pct, Postive_Pct_14dayAvg, Threshold_5PCT, Status, Red_Status, Orange_Status, Yellow_Status, Green_Status, Total, Negative, Positive, Date_Str, Positive_Pct_Str, Postive_Pct_14dayAvg_Str, Threshold_5PCT_Str, Date_Updated, today
+
+- News headlines mentioning COVID-19
+
+## Initial Visualizations
+
+- Plot 1
+
+```{r}
+library(ggplot2)
+
+setwd ("C:\\Users\\Kelly\\Downloads\\2021Sem2\\STAT405\\STAT405Project\\Data")
+load(file = "crimedata.Rda")
+
+# Pie Chart of Types of Crimes
+ggplot(data = crimedata) + aes(x = factor(1), fill = NIBRSDescription) + geom_bar(stat = "count") + 
+  theme(title = element_text(size = 17)) + 
+  labs(title = "Number of Offenses by Type of Crime") +
+  coord_polar(theta = 'y', start = 0) + theme_void() + 
+  theme(plot.title = element_text(hjust = 0.5)) 
+```
+
+## Initial Visualizations
+
+- Plot 2
+```{r}
+setwd ("C:\\Users\\Kelly\\Downloads\\2021Sem2\\STAT405\\STAT405Project\\Data")
+load(file = "covid.rda")
+library(ggplot2)
+covid1 <- tibble::rowid_to_column(covid, "ID")
+ggplot(covid1)+aes(x=id, y=Positive)+labs(y = "Positive Covid Cases", x = "Days after 2020/05/01", title = "Positive Covid Cases by Day")+geom_line()+theme(plot.title = element_text(hjust = 0.5))
+```
+
+## Initial Visualizations
+
+- Plot 3
+```{r}
+crimedata1 <- tibble::rowid_to_column(crimedata, "ID")
+crimecomp <- crimedata1[crimedata1$ID>= 611320, ]
+ggplot(crimecomp)+aes(x=OccurrenceDate)+geom_line(stat = "Count")+ xlab("Days after 2020/05/01") + ylab("Number of Offenses") 
+```
+
+## Initial Visualizations
+
+- Plot 4
+```{r}
+library(ggplot2)
+suppressWarnings(library(ggpubr))
+suppressMessages(library(dplyr))
+suppressMessages(library("gridExtra"))
+
+# Group by NIBRSDescription
+
+# Changing the date format in the Harris County COVID Dataset
+covid$OccurrenceDate <- strptime(covid$Date_Str, "%Y/%m/%d")
+
+covid$OccurrenceDate <- as.Date(covid$OccurrenceDate)
+merged_data <- merge(covid, crimedata)
+
+# Subsetting data based on status types
+red_status <- merged_data[merged_data$Red_Status == 1, ]
+orange_status <- merged_data[merged_data$Orange_Status == 1, ]
+yellow_status <- merged_data[merged_data$Yellow_Status == 1, ]
+green_status <- merged_data[merged_data$Green_Status == 1, ]
+
+cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73",
+               "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+# Red status
+prod <- ggplot(data = red_status) + aes(x=NIBRSDescription)
+red_bar_plot <- prod + geom_bar(data = red_status, fill = "red") + theme(axis.text.x = element_text(angle = 35, hjust=1, size = 5))+ ggtitle("Crimes during Red Status days") + scale_fill_manual(values = cbPalette)
+
+# Orange status
+prod <- ggplot(data = orange_status) + aes(x=NIBRSDescription)
+orange_bar_plot <- prod + geom_bar(data = orange_status, fill = "orange") + theme(axis.text.x = element_text(angle = 35, hjust=1, size = 5)) + ggtitle("Crimes during Orange Status days") + scale_fill_manual(values = cbPalette)
+
+# Yellow status
+prod <- ggplot(data = yellow_status) + aes(x=NIBRSDescription)
+yellow_bar_plot <- prod + geom_bar(data = yellow_status, fill = "yellow") + theme(axis.text.x = element_text(angle = 35, hjust=1, size = 5)) + ggtitle("Crimes during Yellow Status days") + scale_fill_manual(values = cbPalette)
+
+# Green status
+prod <- ggplot(data = green_status) + aes(x=NIBRSDescription)
+green_bar_plot <- prod + geom_bar(data = green_status, fill = "green") + theme(axis.text.x = element_text(angle = 35, hjust=1, size = 5)) + ggtitle("Crimes during Green Status days") + scale_fill_manual(values = cbPalette)
+
+
+grid.arrange(red_bar_plot, orange_bar_plot, yellow_bar_plot, green_bar_plot, ncol = 2)
+```
+
+
+## Question 1
+- Is there a correlation between COVID cases and crime cases?
+- Initial hypothesis is that there are more crimes on days with worse COVID alert levels
+
+## Question 1
+```{r}
+########################### Attach color status to each crime in R ###############################
+#First, transform date format in covid
+covid$Date_format <- as.Date(covid$Date_Str)
+#transform -1s to traditional boolean 0s
+for(color in c("Red", "Orange", "Yellow", "Green")){
+  col <- paste0(color, "_Status")
+  covid[col][covid[col] == -1] <- 0
+}
+
+#convert status to factor variable
+covid$COVID_daily_status <- names(covid[8:11])[apply(covid[8:11] == 1, 1, which)]
+covid$COVID_daily_status <- as.factor(covid$COVID_daily_status)
+#summary(covid$COVID_daily_status)
+
+covid_colors <- select(covid, c(Date_format, COVID_daily_status))
+names(covid_colors)[1] <- "OccurrenceDate"
+#View(covid_colors)
+#View(crimedata)
+
+crimedata_status <- merge(crimedata, covid_colors, by = "OccurrenceDate", all = FALSE)
+#View(crimedata_status)
+status_totals <- summary(covid$COVID_daily_status)
+status_totals <- t(as.data.frame(status_totals))
+#get count totals for number of days with each status
+
+summary_df <- rename(count(crimedata_status, NIBRSDescription, COVID_daily_status), Freq = n)
+
+#adjust frequency by dividing by total number of days with that status (green, red, etc.)
+summary_df$Freq_Adj <- numeric(nrow(summary_df))
+for(i in 1:nrow(summary_df)){
+  status <- as.character(summary_df[i,]$COVID_daily_status)
+  summary_df[i,]$Freq_Adj <- summary_df[i,]$Freq/status_totals[,status]
+}
+
+########################### Data Visualizations ###############################
+
+library(dplyr)
+library(ggplot2)
+
+#Bar plot of crime type by COVID status
+
+summary_df_interim <- summary_df[,-3]
+summary_df2 <- reshape(summary_df_interim,idvar = "COVID_daily_status",
+                timevar = "NIBRSDescription",
+                direction = "wide")
+row.names(summary_df2) <- c("Green", "Orange", "Red", "Yellow")
+summary_df2 <- summary_df2[ , 2:ncol(summary_df2)]
+colnames(summary_df2) <- c("All Other Offenses", "Assault, Rape", paste0("Burglary, Breaking, Entering"),
+                    "Destruction, Damage, Vandalism", "Drug, Alcohol Violations", "Intimidation",
+                    "Murder, Manslaughter", "Theft, Robbery")
+summary_df3 <- summary_df2[c(1,4,2,3),]
+
+summary_df3 <- as.matrix(summary_df3)
+
+# Create grouped barplot
+barplot(height = summary_df3, 
+        main = "Houston Crime Data by Offense Type and COVID alert level",
+        #sub = "05/01/2020 to 12/31/2021",
+        #xlab = "Offense Type", ylab = "Average Offenses per Day",
+        cex.names = 0.3,
+        cex.main = 1,
+        col = c("green", "yellow", "orange", "red"),
+        legend.text = rownames(summary_df3),
+        args.legend = list(x = "top", ncol = 4, title = "COVID alert level (daily)",
+                           cex = 0.7),
+        beside = TRUE,
+        las = 2)
+
+```
+
+## Question 2
+
+- Why are there more occurrences of certain types of crimes compared to others?
+- Our inital hypothesis was that theft & robbery increased a lot due to COVID-19
+- 2019->2020, theft & robbery decreased
+- 2020-2021, theft & robbery remained constant
+- Contrary to our initial hypothesis
+
+## Question 2
+```{r}
+# filter(crimedata1, str_detect(crimedata1$OccurrenceDate, "2021-12-31"))
+
+#crime17 <- crimedata1[crimedata1$ID>= 1 & crimedata1$ID <= 118582, ]
+#ggplot(data = crime17) + aes(x = NIBRSDescription) + geom_bar(stat = "count", fill = c("#AED1EF", "#C1D5E2", "#D4D9D5", "#E8DDC7", "#F2DFC1")) + 
+  #theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 9), 
+   #     axis.text.y = element_text(size = 9), 
+    #    axis.title = element_text(size = 11), 
+     #   title = element_text(size = 13)) + 
+#  xlab("Type of Crime") + ylab("Number of Offenses") + 
+ # labs(title = "Number of Offenses by Type of Crime 2017") +
+#  theme(plot.title = element_text(hjust = 0.5)) 
+
+crime18 <- crimedata1[crimedata1$ID>= 118582 & crimedata1$ID <= 311246, ]
+plot18 <- ggplot(data = crime18) + aes(x = NIBRSDescription) + geom_bar(stat = "count", fill = c("#AED1EF", "#C1D5E2", "#D4D9D5", "#E8DDC7", "#F2DFC1", "#F2D9C8", "#F1CED5", "#F0B9EF")) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6), 
+        axis.text.y = element_text(size = 4), 
+        axis.title = element_text(size = 7), 
+        title = element_text(size = 10)) + 
+  xlab("Type of Crime") + ylab("Number of Offenses") + 
+  labs(title = "Number of Offenses by Type of Crime 2018") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+crime19 <- crimedata1[crimedata1$ID>= 311246 & crimedata1$ID <= 530280, ]
+plot19 <- ggplot(data = crime19) + aes(x = NIBRSDescription) + geom_bar(stat = "count", fill = c("#AED1EF", "#C1D5E2", "#D4D9D5", "#E8DDC7", "#F2DFC1", "#F2D9C8", "#F1CED5")) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6), 
+        axis.text.y = element_text(size = 4), 
+        axis.title = element_text(size = 7), 
+        title = element_text(size = 10)) + 
+  xlab("Type of Crime") + ylab("Number of Offenses") + 
+  labs(title = "Number of Offenses by Type of Crime 2019") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+crime20 <- crimedata1[crimedata1$ID>= 530280 & crimedata1$ID <= 778191, ]
+plot20 <- ggplot(data = crime20) + aes(x = NIBRSDescription) + geom_bar(stat = "count", fill = c("#AED1EF", "#C1D5E2", "#D4D9D5", "#E8DDC7", "#F2DFC1", "#F2D9C8", "#F1CED5", "#F0B9EF")) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6), 
+        axis.text.y = element_text(size = 4), 
+        axis.title = element_text(size = 7), 
+        title = element_text(size = 10)) + 
+  xlab("Type of Crime") + ylab("Number of Offenses") + 
+  labs(title = "Number of Offenses by Type of Crime 2020") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+
+crime21 <- crimedata1[crimedata1$ID>= 778191 & crimedata1$ID <= 1025169, ]
+plot21 <- ggplot(data = crime21) + aes(x = NIBRSDescription) + geom_bar(stat = "count", fill = c("#AED1EF", "#C1D5E2", "#D4D9D5", "#E8DDC7", "#F2DFC1", "#F2D9C8", "#F1CED5", "#F0B9EF")) + 
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6), 
+        axis.text.y = element_text(size = 4), 
+        axis.title = element_text(size = 7), 
+        title = element_text(size = 10)) + 
+  xlab("Type of Crime") + ylab("Number of Offenses") + 
+  labs(title = "Number of Offenses by Type of Crime 2021") +
+  theme(plot.title = element_text(hjust = 0.5)) 
+# for some reason, this part shows up really awkwardly on my console, not sure if shiny helps
+
+grid.arrange(plot18, plot19, plot20, plot21, ncol = 2)
+```
+
+
+## Question 3
+- Does crime in Houston, Texas change by time of day in response to COVID-19?
+- The initial hypothesis was that COVID-19 did change the trend of Houston crime data over time
+
+## Question 3
+```{r}
+##Houston Crime by Time of Day(2017-2021) USING ggplot2
+library(ggplot2)
+setwd ("C:\\Users\\Kelly\\Downloads\\2021Sem2\\STAT405\\STAT405Project\\Data")
+load(file = "crimedata.Rda")
+# Convert hour column from character to numeric"
+OccurrenceHour2<- as.numeric(crimedata$OccurrenceHour)
+crimedata2 <- cbind(crimedata,OccurrenceHour2)
+crimedata2['OccurrenceHour2'][crimedata2['OccurrenceHour2'] == 24] <-  0
+
+count <- table(crimedata2$NIBRSDescription, crimedata2$OccurrenceHour2)
+
+
+cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+theme1 <- theme(axis.text = element_text(size = 8, colour = "#6b3447"),
+          axis.title = element_text(size = 10, colour = "#2f2f63"),
+          legend.text = element_text(size = 8, colour = "#6b3447"),
+          legend.position = "top",
+          title = element_text(size = 13, colour = "#2f2f63"),
+          axis.ticks = element_line(colour = "#6b3447"),
+          axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+          axis.text.y = element_text(angle = 0, hjust = 1, size = 10),
+          axis.title.x = element_text(size = 11),
+          axis.title.y = element_text(size = 11))
+
+ggplot(data = crimedata2) + aes(x =OccurrenceHour2, fill=NIBRSDescription) + geom_bar(stat = "Count") + xlab("Hour") + ylab("Count") + scale_x_continuous(breaks=seq (0,23,by=1)) + scale_y_continuous(breaks=seq (0,70000,by=10000)) + labs(title = "Houston Crime by Time of Day(2017-2021)")+theme(plot.title = element_text(hjust=0.5)) + labs(fill='') + theme1 + scale_fill_manual(values=cbPalette) 
+
+```
+
+## Question 3
+```{r}
+library(ggplot2)
+# Houston Crime by Time of Day(2017-2019) to see correlation
+crimedata3 <- crimedata2[crimedata2$OccurrenceDate >= "2017-01-01" & crimedata2$OccurrenceDate <= "2019-12-31", ]
+
+count <- table(crimedata3$NIBRSDescription, crimedata3$OccurrenceHour2)
+
+         cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+         theme1 <- theme(axis.text = element_text(size = 8, colour = "#6b3447"),
+                 axis.title = element_text(size = 10, colour = "#2f2f63"),
+                 legend.text = element_text(size = 8, colour = "#6b3447"),
+                 #legend.position = "top",
+                 title = element_text(size = 13, colour = "#2f2f63"),
+                 axis.ticks = element_line(colour = "#6b3447"),
+                 axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+                 axis.text.y = element_text(angle = 0, hjust = 1, size = 10),
+                 axis.title.x = element_text(size = 11),
+                 axis.title.y = element_text(size = 11))
+
+plot2 <- ggplot(data = crimedata3) + aes(x =OccurrenceHour2, fill=NIBRSDescription) + geom_bar(stat = "Count") + xlab("Hour") + ylab("Count") + scale_x_continuous(breaks=seq (0,23,by=1))+scale_y_continuous(breaks=seq (0,35000, by=10000))+labs(title = "Houston Crime by Time of Day(2017-2019)")+theme(plot.title = element_text(hjust=0.5))+labs(fill='')+theme1+scale_fill_manual(values=cbPalette)
+
+
+
+crimedata4 <- crimedata2[crimedata2$OccurrenceDate >= "2020-01-01" & crimedata2$OccurrenceDate <= "2021-12-31", ]
+  
+count <- table(crimedata3$NIBRSDescription, crimedata3$OccurrenceHour2)
+
+         cbPalette <- c("#999999", "#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+         theme1 <- theme(axis.text = element_text(size = 6, colour = "#6b3447"),
+                 axis.title = element_text(size = 10, colour = "#2f2f63"),
+                 legend.text = element_text(size = 8, colour = "#6b3447"),
+                 #legend.position = "top",
+                 title = element_text(size = 13, colour = "#2f2f63"),
+                 axis.ticks = element_line(colour = "#6b3447"),
+                 axis.text.x = element_text(angle = 45, hjust = 1, size = 10),
+                 axis.text.y = element_text(angle = 0, hjust = 1, size = 10),
+                 axis.title.x = element_text(size = 11),
+                 axis.title.y = element_text(size = 11))
+
+plot3 <- ggplot(data = crimedata4) + aes(x =OccurrenceHour2, fill=NIBRSDescription) + geom_bar(stat = "Count") + xlab("Hour") + ylab("Count") + scale_x_continuous(breaks=seq (0,23,by=1))+ labs(title = "Houston Crime by Time of Day(2020-2021)")+theme(plot.title = element_text(hjust=0.5))+labs(fill='')+ theme1+scale_fill_manual(values=cbPalette)+ scale_y_continuous (breaks=seq (0,35000, by=10000))
+
+grid.arrange(plot2, plot3, nrow = 2)
+```
+
+## Killer Plot
+```{r}
+suppressWarnings(library(RSQLite))
+suppressWarnings(library(stringr))
+suppressWarnings(library(grid))
+suppressWarnings(library(shiny))
+
+setwd ("C:\\Users\\Kelly\\Downloads\\2021Sem2\\STAT405\\STAT405Project\\Data")
+
+#create connection
+dcon <- dbConnect(SQLite(), dbname = "STAT405_crimeCOVIDfinal.sqlite")
+
+invisible(suppressMessages(dbSendQuery(conn = dcon, "
+PRAGMA foreign_keys = ON;
+")))
+
+query <- paste0("
+ SELECT * from (select OccurrenceDate, NIBRSDescription, count(NIBRSDescription) as total
+    FROM crimedata
+    GROUP BY OccurrenceDate, NIBRSDescription) AS c
+    INNER JOIN (SELECT Date_Format AS OccurrenceDate, Positive_Pct, COVID_daily_status
+                  FROM covid) AS o
+                ON c.OccurrenceDate = o.OccurrenceDate")
+suppressWarnings(res <- dbSendQuery(dcon, query))
+killerdata<- dbFetch(res, -1)[,-c(4)]
+dbClearResult(res)
+
+dbDisconnect(dcon)
+
+#abbreviate alert status to only color name (more aesthetically pleasing colors)
+killerdata$COVID_daily_status <- str_replace(killerdata$COVID_daily_status, "_Status", "")
+killerdata$COVID_daily_status <- str_replace(killerdata$COVID_daily_status, "Red", "firebrick3")
+killerdata$COVID_daily_status <- str_replace(killerdata$COVID_daily_status, "Orange", "darkorange2")
+killerdata$COVID_daily_status <- str_replace(killerdata$COVID_daily_status, "Yellow", "gold1")
+killerdata$COVID_daily_status <- str_replace(killerdata$COVID_daily_status, "Green", "palegreen3")
+
+makeplot <- function(data, date_str){
+  #data = killerdata
+  #date_str = "2020-05-01"
+  grid.newpage()
+  vp <- viewport(x = 0.5, y = 0.5, 
+                 width = 0.7, height = 0.7, 
+                 just = c("center", "center"),
+                 xscale = c(0,1), yscale = c(0, 100))
+  #grid.show.viewport(vp)
+  pushViewport(vp)
+  #grid.rect(gp = gpar(col = "red"))
+  
+  day <- data[data$OccurrenceDate == date_str,]
+  color <- as.character(day$COVID_daily_status[1])
+  #print(color)
+  pos_rate <- day$Positive_Pct[1]
+  
+  grid.rect(x = 0.001, y = 0,
+            width = 0.999, height = pos_rate / 100,
+            gp = gpar(col = color, fill = color),
+            just = c("left", "bottom"))
+  #grid.text("Origin", x = 0, y = 0, just = c("left", "bottom"))
+  #grid.yaxis(at = c(0, pos_rate, seq(20, 100, by = 20)))
+  grid.yaxis(at = c(0, pos_rate, 100),
+             gp = gpar(fontsize = 12))
+  
+  bar_vp <- viewport(x = 0.5, y = pos_rate / 100 + 0.18,
+                     width = 0.8, height = 0.57, 
+                     just = c("center", "bottom"),
+                     yscale = c(0, 310))
+  pushViewport(bar_vp)
+  #grid.rect(gp = gpar(col = "red"))
+  grid.yaxis(main = FALSE,
+             gp = gpar(col = "gray48", fontsize = 12))
+  
+  #create bars
+  num_bars <- dim(day)[1]
+  spacing <- 1 / num_bars
+  spacing_vect <- seq(0 + (spacing / 8), (1-spacing/8), by = spacing)
+  
+  for(i in 1:num_bars){
+    grid.rect(x = spacing_vect[i], y = 0,
+              width = 2 * spacing / 3, height = (day$total[i] / 310),
+              gp = gpar(col = "gray30", fill = "gray30"),
+              just = c("left", "bottom"))
+    grid.text(label = day$NIBRSDescription[i],
+              x = spacing_vect[i], y = (day$total[i] / 310 + 0.04),
+              just = c("left", "top"), rot = 75,
+              gp = gpar(fontsize = 12, col = "gray48"))
+    
+    stack_vp <- viewport(x = spacing_vect[i], y = day$total[i] / 310,
+                         width = 2 * spacing / 3, height = 0.08, 
+                         just = c("left", "top"),
+                         clip = "on")
+    pushViewport(stack_vp)
+    grid.circle(x = 0.5, y = 1.75, r=1.5,
+                gp = gpar(col = "gray30", fill = "gray48"))
+    popViewport()
+  }
+  
+  popViewport()
+  
+  day_total <- sum(day$total)
+  
+  inner_vp <- viewport(x = 0.5, y = pos_rate / 100,
+                       width = 1, height = 0.18, 
+                       just = c("center", "bottom"),
+                       clip = "on")
+  pushViewport(inner_vp)
+  grid.circle(x = 0.5, y = 3.5, r=4, 
+              gp = gpar(col = "gray30", fill = "gray30"))
+  grid.text(paste0("Day's Observed Crime Count = ", day_total), 
+            x =0.5, y = 0.6, 
+            just = c("center", "center"),
+            gp = gpar(col = "white", fontsize = 16))
+  popViewport()
+  
+  wake_vp <- viewport(x = 0.78, y = pos_rate / 100,
+                       width = 0.15, height = 0.05, 
+                       just = c("center", "center"),
+                       clip = "on")
+  pushViewport(wake_vp)
+  print("now")
+  grid.circle(x = 0.5, y = -1.2, r=2.2, 
+              gp = gpar(col = color, fill = color))
+  #grid.rect(gp = gpar(col = "green"))
+  popViewport()
+  
+  popViewport()
+  
+  label_vp <- viewport(x = 0.5, y = 0.5, 
+                 width = 0.9, height = 0.9, 
+                 just = c("center", "center"))
+  pushViewport(label_vp)
+  grid.text(label = paste0("Houston Daily Crime by Type (with COVID-19 levels)"),
+            x = 0.5, y = 0.07,
+            just = c("centre"),
+            gp = gpar(fontsize = 24, col = "black"))
+  grid.text(label = paste0("color = COVID alert level"),
+            x = 0.75, y = 0,
+            just = c("centre"),
+            gp = gpar(col = ifelse(color == "gold1", "black", color),
+                      fontsize = 15))
+  grid.text(label = paste0("Logged Crime Count (by Houston Police)"),
+            x = 0.93, y = 0.5,
+            rot = 90,
+            just = c("centre"),
+            gp = gpar(col = "gray48", fontsize = 15))
+  grid.text(label = paste0("Houston Positive Test Rate (COVID-19)"),
+            x = 0, y = 0.5,
+            rot = 90,
+            just = c("centre"),
+            gp = gpar(col = "black", fontsize = 15))
+  popViewport()
+}
+
+inputPanel(
+  dateInput("dateID", label = "Date: ",
+           value = "2020-05-01", min = "2020-05-01", max = "2021-12-31",
+           format = "yyyy-mm-dd")
+)
+
+renderPlot(makeplot(killerdata, input$dateID), width = 594, height = 432)
+```
+
+
+## Conclusion
+- With the exception of red status days, crime seems to be more frequent on days with large numbers of COVID cases
+- Even though COVID cases continued to increase over the years, the most common crime cases (theft & robbery) remained stable
+- COVID-19 changed the time of occurrence in some violations, but the general trend remained the same
