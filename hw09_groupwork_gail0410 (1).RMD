@@ -1,0 +1,89 @@
+---
+title: "hw09_group_submission"
+author: "Gail Oudekerk"
+date: "4/10/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(RSQLite)
+library(stringr)
+setwd ("C:/Users/gailo/OneDrive/Documents/STAT_405/Rwork_405/final_project")
+```
+
+```{r}
+#create connection
+dcon <- dbConnect(SQLite(), dbname = "STAT405_crimeCOVIDfinal.sqlite")
+
+#don't forget to download the database.sqlite file instead.
+
+dbSendQuery(conn = dcon, "
+PRAGMA foreign_keys = ON;
+")
+
+## List tables
+dbListTables(dcon)
+
+#load all of covid data
+query <- paste0("
+SELECT *	
+  FROM covid")
+res <- dbSendQuery(dcon, query)
+covid <- dbFetch(res, -1)
+dbClearResult(res)
+
+#load all of crime data
+query <- paste0("
+SELECT *	
+  FROM crimedata")
+res <- dbSendQuery(dcon, query)
+crime <- dbFetch(res, -1)
+dbClearResult(res)
+
+query <- paste0("
+SELECT *	
+  FROM covidnews")
+res <- dbSendQuery(dcon, query)
+covidnews <- dbFetch(res, -1)
+dbClearResult(res)
+```
+
+#string work here:
+
+#[Kelly Zeng, Using str_length]
+```{r}
+library (readr)
+urlfile="https://raw.githubusercontent.com/MickeysClubhouse/COVID-19-rumor-dataset/master/Data/news/news.csv"
+covidnews <- read_csv(url(urlfile))
+save(covidnews, file="covidnews.Rda") 
+colnames(covidnews) <- c('1','2','news', '3')
+
+library(stringr)
+min(str_length(covidnews$news))
+max(str_length(covidnews$news))
+mean(str_length(covidnews$news))
+median(str_length(covidnews$news))
+```
+
+#[Elijah Sales, Using str_replace_all]
+```{r}
+library(stringr)
+crime$NIBRSDescription <- str_replace_all(crime$NIBRSDescription, "Theft, Robbery", "TR")
+crime$NIBRSDescription <- str_replace_all(crime$NIBRSDescription, "Assault, Rape", "AR")
+crime$NIBRSDescription <- str_replace_all(crime$NIBRSDescription, "Burglary, Breaking, Entering", "BBE")
+crime$NIBRSDescription <- str_replace_all(crime$NIBRSDescription, "Murder, Manslaughter", "MM")
+crime$NIBRSDescription <- str_replace_all(crime$NIBRSDescription, "All Other Offenses", "Other")
+crime$NIBRSDescription <- str_replace_all(crime$NIBRSDescription, "Drugs, Alcohol Violations", "DAV")
+crime$NIBRSDescription <- str_replace_all(crime$NIBRSDescription, "Destruction, damage, vandalism", "DDV")
+crime$NIBRSDescription <- str_replace_all(crime$NIBRSDescription, "Intimidation", "I")
+unique(crime$NIBRSDescription)
+```
+
+```{r}
+dbDisconnect(dcon)
+```
+
