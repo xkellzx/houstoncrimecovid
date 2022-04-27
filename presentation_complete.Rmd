@@ -30,10 +30,8 @@ Is there a relationship between COVID-19 positivity rates and crime offense rate
 
 ```{r}
 library(ggplot2)
-
 setwd ("C:\\Users\\Kelly\\Downloads\\2021Sem2\\STAT405\\STAT405Project\\Data")
 load(file = "crimedata.Rda")
-
 # Pie Chart of Types of Crimes
 ggplot(data = crimedata) + aes(x = factor(1), fill = NIBRSDescription) + geom_bar(stat = "count") + 
   theme(title = element_text(size = 17)) + 
@@ -62,9 +60,13 @@ crimecomp <- crimedata1[crimedata1$ID>= 611320, ]
 ggplot(crimecomp)+aes(x=OccurrenceDate)+geom_line(stat = "Count")+ xlab("Days after 2020/05/01") + ylab("Number of Offenses") 
 ```
 
-## Initial Visualizations
 
-- Plot 4
+## Question 1
+- Is there a correlation between COVID cases and crime cases?
+- Initial hypothesis is that there are more crimes on days with worse COVID alert levels
+
+## Question 1
+
 ```{r}
 library(ggplot2)
 suppressWarnings(library(ggpubr))
@@ -106,83 +108,6 @@ green_bar_plot <- prod + geom_bar(data = green_status, fill = "green") + theme(a
 
 
 grid.arrange(red_bar_plot, orange_bar_plot, yellow_bar_plot, green_bar_plot, ncol = 2)
-```
-
-
-## Question 1
-- Is there a correlation between COVID cases and crime cases?
-- Initial hypothesis is that there are more crimes on days with worse COVID alert levels
-
-## Question 1
-```{r}
-########################### Attach color status to each crime in R ###############################
-#First, transform date format in covid
-covid$Date_format <- as.Date(covid$Date_Str)
-#transform -1s to traditional boolean 0s
-for(color in c("Red", "Orange", "Yellow", "Green")){
-  col <- paste0(color, "_Status")
-  covid[col][covid[col] == -1] <- 0
-}
-
-#convert status to factor variable
-covid$COVID_daily_status <- names(covid[8:11])[apply(covid[8:11] == 1, 1, which)]
-covid$COVID_daily_status <- as.factor(covid$COVID_daily_status)
-#summary(covid$COVID_daily_status)
-
-covid_colors <- select(covid, c(Date_format, COVID_daily_status))
-names(covid_colors)[1] <- "OccurrenceDate"
-#View(covid_colors)
-#View(crimedata)
-
-crimedata_status <- merge(crimedata, covid_colors, by = "OccurrenceDate", all = FALSE)
-#View(crimedata_status)
-status_totals <- summary(covid$COVID_daily_status)
-status_totals <- t(as.data.frame(status_totals))
-#get count totals for number of days with each status
-
-summary_df <- rename(count(crimedata_status, NIBRSDescription, COVID_daily_status), Freq = n)
-
-#adjust frequency by dividing by total number of days with that status (green, red, etc.)
-summary_df$Freq_Adj <- numeric(nrow(summary_df))
-for(i in 1:nrow(summary_df)){
-  status <- as.character(summary_df[i,]$COVID_daily_status)
-  summary_df[i,]$Freq_Adj <- summary_df[i,]$Freq/status_totals[,status]
-}
-
-########################### Data Visualizations ###############################
-
-library(dplyr)
-library(ggplot2)
-
-#Bar plot of crime type by COVID status
-
-summary_df_interim <- summary_df[,-3]
-summary_df2 <- reshape(summary_df_interim,idvar = "COVID_daily_status",
-                timevar = "NIBRSDescription",
-                direction = "wide")
-row.names(summary_df2) <- c("Green", "Orange", "Red", "Yellow")
-summary_df2 <- summary_df2[ , 2:ncol(summary_df2)]
-colnames(summary_df2) <- c("All Other Offenses", "Assault, Rape", paste0("Burglary, Breaking, Entering"),
-                    "Destruction, Damage, Vandalism", "Drug, Alcohol Violations", "Intimidation",
-                    "Murder, Manslaughter", "Theft, Robbery")
-summary_df3 <- summary_df2[c(1,4,2,3),]
-
-summary_df3 <- as.matrix(summary_df3)
-
-# Create grouped barplot
-barplot(height = summary_df3, 
-        main = "Houston Crime Data by Offense Type and COVID alert level",
-        #sub = "05/01/2020 to 12/31/2021",
-        #xlab = "Offense Type", ylab = "Average Offenses per Day",
-        cex.names = 0.3,
-        cex.main = 1,
-        col = c("green", "yellow", "orange", "red"),
-        legend.text = rownames(summary_df3),
-        args.legend = list(x = "top", ncol = 4, title = "COVID alert level (daily)",
-                           cex = 0.7),
-        beside = TRUE,
-        las = 2)
-
 ```
 
 ## Question 2
@@ -494,6 +419,7 @@ renderPlot(makeplot(killerdata, input$dateID), width = 594, height = 432)
 
 
 ## Conclusion
-- With the exception of red status days, crime seems to be more frequent on days with large numbers of COVID cases
-- Even though COVID cases continued to increase over the years, the most common crime cases (theft & robbery) remained stable
+- Crimes across all offense types appear more frequent with worsening COVID alert levels
+- Even though COVID cases continued to increase over the years, the most common crime cases remained stable
 - COVID-19 changed the time of occurrence in some violations, but the general trend remained the same
+- Building customizable, flexible plots in grid can help us convey complex data trends in original, interesting ways
